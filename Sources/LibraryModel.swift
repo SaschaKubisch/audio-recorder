@@ -46,6 +46,7 @@ final class LibraryModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
     private var watcher: DispatchSourceFileSystemObject?
     private var watchedPath: String?
     private var pendingReload: DispatchWorkItem?
+    private var reloadGeneration = 0
     private var folderSubscription: AnyCancellable?
     private let loadQueue = DispatchQueue(label: "local.recorder.library", qos: .utility)
     private var durationCache: [String: TimeInterval] = [:] // only touched on loadQueue
@@ -80,6 +81,8 @@ final class LibraryModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     func reload() {
         let directory = folder.url
+        reloadGeneration += 1
+        let generation = reloadGeneration
         let excluded = recordingInProgress?.standardizedFileURL.path
         loadQueue.async { [weak self] in
             guard let self else { return }
@@ -107,10 +110,12 @@ final class LibraryModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 $0.created != $1.created ? $0.created > $1.created : $0.url.lastPathComponent > $1.url.lastPathComponent
             }
             DispatchQueue.main.async {
-                // Ignore a result for a folder that is no longer the chosen one.
-                guard directory == self.folder.url else { return }
+                // Ignore a result for another folder or one that a newer reload has replaced.
+                guard directory == self.folder.url, generation == self.reloadGeneration else { return }
                 if found != self.items { self.items = found }
-                if let selection = self.selection, !found.contains(where: { $0.url == selection }) {
+                // Drop the selection only when its file is really gone.
+                if let selection = self.selection, !found.contains(where: { $0.url == selection }),
+                   !FileManager.default.fileExists(atPath: selection.path) {
                     self.selection = nil
                 }
             }

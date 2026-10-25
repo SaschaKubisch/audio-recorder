@@ -248,6 +248,8 @@ final class RecorderModel: ObservableObject {
             notice = Notice(kind: .error, text: "The input device was disconnected. \(saved)")
         case .configurationChanged:
             notice = Notice(kind: .error, text: "The audio setup changed, for example the input device or its sample rate. \(saved)")
+        case .inputStalled:
+            notice = Notice(kind: .error, text: "No audio arrived from the input device for 4 seconds. \(saved)")
         case let .writeFailed(message):
             notice = Notice(kind: .error, text: "Writing the file failed: \(message) \(saved)")
         }

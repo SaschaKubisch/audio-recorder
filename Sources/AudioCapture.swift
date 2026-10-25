@@ -23,6 +23,7 @@ enum CaptureStopReason {
     case user
     case deviceDisconnected
     case configurationChanged
+    case inputStalled
     case writeFailed(String)
 }
 
@@ -54,6 +55,10 @@ final class AudioCapture {
     private var reportedFormat = false
     private var interrupted = false
     private var writerCreationFailed = false
+
+    private var lastBufferAt = Date()
+    private var restartAttempts = 0
+    private var stallTimer: Timer?
 
     private var aliveWatch: AudioDevices.Watch?
     private var listWatch: AudioDevices.Watch?
@@ -109,28 +114,35 @@ final class AudioCapture {
         reportedFormat = false
         interrupted = false
         writerCreationFailed = false
+        lastBufferAt = Date()
         lock.unlock()
 
         fileURL = url
         fileFormat = format
         deviceID = device.id
+        restartAttempts = 0
 
-        // Format nil: the tap takes the input node's own format, which is the device format.
-        input.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak self] buffer, _ in
-            self?.handle(buffer)
-        }
+        self.engine = engine
+        installTap(on: engine)
+        // Registered before the start, so a change posted while starting is not missed.
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+        ) { [weak self] _ in self?.handleConfigurationChange() }
         engine.prepare()
         do {
             try engine.start()
         } catch {
             input.removeTap(onBus: 0)
+            if let observer = configObserver { NotificationCenter.default.removeObserver(observer) }
+            configObserver = nil
+            self.engine = nil
             lock.lock(); stopped = true; lock.unlock()
             throw CaptureError.engine(error)
         }
-        self.engine = engine
 
-        // Device loss: the device stops being alive, the device list changes, or the engine
-        // reports a configuration change and is no longer running.
+        // Device loss: the device stops being alive or leaves the device list. A configuration
+        // change is checked after a short pause, because starting on a chosen device often posts one
+        // that needs no action. A watchdog covers the case where audio simply stops arriving.
         aliveWatch = AudioDevices.watchAlive(device.id) { [weak self] in
             if !AudioDevices.isAlive(device.id) { self?.interrupt(.deviceDisconnected) }
         }
@@ -140,16 +152,9 @@ final class AudioCapture {
                 self.interrupt(.deviceDisconnected)
             }
         }
-        configObserver = NotificationCenter.default.addObserver(
-            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
-        ) { [weak self] _ in
-            guard let self, let engine = self.engine, !engine.isRunning else { return }
-            if AudioDevices.isAlive(device.id) && AudioDevices.inputDevices().contains(where: { $0.id == device.id }) {
-                self.interrupt(.configurationChanged)
-            } else {
-                self.interrupt(.deviceDisconnected)
-            }
-        }
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in self?.checkForStall() }
+        RunLoop.main.add(timer, forMode: .common)
+        stallTimer = timer
     }
 
     /// Stops the engine, writes out everything still queued and closes the file. Returns the file
@@ -160,6 +165,7 @@ final class AudioCapture {
         stopped = true
         lock.unlock()
 
+        stallTimer?.invalidate(); stallTimer = nil
         aliveWatch?.cancel(); aliveWatch = nil
         listWatch?.cancel(); listWatch = nil
         if let observer = configObserver { NotificationCenter.default.removeObserver(observer) }
@@ -193,6 +199,7 @@ final class AudioCapture {
 
         lock.lock()
         if stopped || writerCreationFailed { lock.unlock(); return }
+        lastBufferAt = Date()
         var current = writer
         let isPaused = paused
         let needsFormatReport = !reportedFormat
@@ -233,6 +240,46 @@ final class AudioCapture {
         DispatchQueue.main.async { [weak self] in self?.onLevels?(reading) }
 
         if !isPaused { current?.append(buffer) }
+    }
+
+    // MARK: Engine and device changes
+
+    /// Format nil: the tap takes the input node's own format, which is the device format.
+    private func installTap(on engine: AVAudioEngine) {
+        engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak self] buffer, _ in
+            self?.handle(buffer)
+        }
+    }
+
+    private func deviceStillPresent() -> Bool {
+        AudioDevices.isAlive(deviceID) && AudioDevices.inputDevices().contains { $0.id == deviceID }
+    }
+
+    private func handleConfigurationChange() {
+        guard isRunning, engine != nil else { return }
+        guard deviceStillPresent() else { interrupt(.deviceDisconnected); return }
+        let watched = engine
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self, self.isRunning, let engine = self.engine, engine === watched else { return }
+            guard self.deviceStillPresent() else { self.interrupt(.deviceDisconnected); return }
+            if engine.isRunning { return } // nothing to do
+            // The system stopped the engine. Restart it with a fresh tap, a few times at most.
+            // If the sample rate changed, the writer refuses the data and the recording is saved and stopped.
+            self.restartAttempts += 1
+            guard self.restartAttempts <= 3 else { self.interrupt(.configurationChanged); return }
+            engine.inputNode.removeTap(onBus: 0)
+            self.installTap(on: engine)
+            engine.prepare()
+            do { try engine.start() } catch { self.interrupt(.configurationChanged) }
+        }
+    }
+
+    private func checkForStall() {
+        lock.lock()
+        let silentFor = Date().timeIntervalSince(lastBufferAt)
+        let active = !stopped
+        lock.unlock()
+        if active, silentFor > 4 { interrupt(.inputStalled) }
     }
 
     // MARK: Interruptions

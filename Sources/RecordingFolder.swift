@@ -54,7 +54,12 @@ final class RecordingFolderStore: ObservableObject {
 
     /// Switches to a folder the user picked and remembers it.
     func choose(_ folder: URL) {
-        url = folder.standardizedFileURL
+        let picked = folder.standardizedFileURL
+        if FileManager.default.fileExists(atPath: picked.path), !FileManager.default.isWritableFile(atPath: picked.path) {
+            notice = "The folder \(Self.abbreviated(picked)) is not writable. Still saving to \(displayPath)."
+            return
+        }
+        url = picked
         notice = nil
         defaults.set(url.path, forKey: Self.defaultsKey)
     }

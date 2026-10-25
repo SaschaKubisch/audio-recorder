@@ -16,7 +16,7 @@ Recorder is a small native macOS app that records audio from a microphone or any
   - Move to Trash (uses the Trash; nothing is deleted permanently)
   - Drag a row into Finder or another app to copy the file there.
 - Asks for microphone permission the first time you record. If it was denied, the window explains this and has a button that opens System Settings, Privacy & Security, Microphone.
-- If the input device is unplugged or the audio setup changes while recording, the recording stops and the file is closed and kept. The window says what happened.
+- If the input device is unplugged, the audio setup changes (for example the sample rate), or no audio arrives for 4 seconds while recording, the recording stops and the file is closed and kept. The window says what happened.
 - Quitting or closing the window during a recording stops it first, so the file is complete.
 
 ## Choosing the folder
