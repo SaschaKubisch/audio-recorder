@@ -109,7 +109,7 @@ final class RecordingWriter {
     /// Called once, on an arbitrary thread, when a write fails (disk full, encoder error).
     var onFailure: ((Error) -> Void)?
 
-    private let queue = DispatchQueue(label: "local.recorder.writer", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "io.github.saschakubisch.recorder.writer", qos: .userInitiated)
     private let processingFormat: AVAudioFormat
     private var file: AVAudioFile? // only touched on `queue`
     private var failed = false // only touched on `queue`

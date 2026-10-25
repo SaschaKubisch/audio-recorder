@@ -49,7 +49,7 @@ final class LibraryModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
     private var pendingReload: DispatchWorkItem?
     private var reloadGeneration = 0
     private var folderSubscription: AnyCancellable?
-    private let loadQueue = DispatchQueue(label: "local.recorder.library", qos: .utility)
+    private let loadQueue = DispatchQueue(label: "io.github.saschakubisch.recorder.library", qos: .utility)
     private var durationCache: [String: TimeInterval] = [:] // only touched on loadQueue
 
     init(folder: RecordingFolderStore = .shared) {

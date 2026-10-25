@@ -16,7 +16,7 @@ final class RecorderModel: ObservableObject {
         let text: String
     }
 
-    // UserDefaults keys (domain `local.recorder`).
+    // UserDefaults keys (domain `io.github.saschakubisch.recorder`).
     static let inputKey = "inputDeviceUID"
     static let formatKey = "recordingFormat"
     private static let privacySettingsURL = "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"

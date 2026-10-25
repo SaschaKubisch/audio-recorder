@@ -23,13 +23,13 @@ Recorder is a small native macOS app that records audio from a microphone or any
 
 The row "Save to" in the window shows where recordings go. "Choose..." opens a folder picker (it is disabled while recording). The list below shows the files of the chosen folder and updates when the folder changes.
 
-The choice is stored as a plain path in the app's preferences, domain `local.recorder`, key `recordingsFolderPath`. The app is not sandboxed, so no bookmark is needed. If the stored folder no longer exists when the app starts, the app uses `~/Music/Recordings` and says so under the row.
+The choice is stored as a plain path in the app's preferences, domain `io.github.saschakubisch.recorder`, key `recordingsFolderPath`. The app is not sandboxed, so no bookmark is needed. If the stored folder no longer exists when the app starts, the app uses `~/Music/Recordings` and says so under the row.
 
 From a shell:
 
 ```
-defaults write local.recorder recordingsFolderPath /path/to/folder   # set
-defaults delete local.recorder recordingsFolderPath                  # back to the default
+defaults write io.github.saschakubisch.recorder recordingsFolderPath /path/to/folder   # set
+defaults delete io.github.saschakubisch.recorder recordingsFolderPath                  # back to the default
 ```
 
 Other stored settings: `inputDeviceUID` (the chosen input device; empty means System Default) and `recordingFormat` (`wav24` or `m4a`).

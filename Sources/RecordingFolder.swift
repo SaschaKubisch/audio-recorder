@@ -10,7 +10,7 @@ import Foundation
 final class RecordingFolderStore: ObservableObject {
     static let shared = RecordingFolderStore()
 
-    /// UserDefaults key (domain `local.recorder`). Holds a folder path.
+    /// UserDefaults key (domain `io.github.saschakubisch.recorder`). Holds a folder path.
     static let defaultsKey = "recordingsFolderPath"
 
     static var defaultFolder: URL {

@@ -39,7 +39,7 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
 echo "==> Signing (ad-hoc)"
-codesign --force --sign - --identifier local.recorder "$APP"
+codesign --force --sign - --identifier io.github.saschakubisch.recorder "$APP"
 codesign --verify --verbose "$APP"
 
 echo "Built $APP"

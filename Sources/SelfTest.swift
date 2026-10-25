@@ -181,7 +181,7 @@ enum SelfTest {
         do { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) } catch {
             report(false, "library: \(error.localizedDescription)"); return
         }
-        let suite = "local.recorder.selftest"
+        let suite = "io.github.saschakubisch.recorder.selftest"
         guard let defaults = UserDefaults(suiteName: suite) else { report(false, "library: no defaults suite"); return }
         defaults.removePersistentDomain(forName: suite)
         let store = RecordingFolderStore(defaults: defaults)
@@ -226,7 +226,7 @@ enum SelfTest {
     }
 
     private static func checkFolderStore() {
-        let suite = "local.recorder.selftest"
+        let suite = "io.github.saschakubisch.recorder.selftest"
         guard let defaults = UserDefaults(suiteName: suite) else { report(false, "folder: no defaults suite"); return }
         defaults.removePersistentDomain(forName: suite)
 
