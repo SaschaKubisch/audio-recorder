@@ -45,6 +45,8 @@ enum SelfTest {
 
         checkLevelMeasure()
         checkNaming()
+        checkLibrary(in: extra)
+        checkFolderStore()
 
         print(failures == 0 ? "SELF-TEST PASSED" : "SELF-TEST FAILED (\(failures) failure(s))")
         return failures == 0 ? 0 : 1
@@ -169,6 +171,91 @@ enum SelfTest {
         guard let date = components.date else { report(false, "naming: bad date"); return }
         let name = RecordingNaming.baseName(for: date)
         report(name == "Recording 2026-03-09 07.05.04", "naming: \(name)")
+    }
+
+    /// The recordings list and the rename rules, on a scratch folder (nothing is trashed).
+    private static func checkLibrary(in extra: URL) {
+        let folder = extra.deletingLastPathComponent().appendingPathComponent("library", isDirectory: true)
+        try? FileManager.default.removeItem(at: folder)
+        do { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) } catch {
+            report(false, "library: \(error.localizedDescription)"); return
+        }
+        let suite = "local.recorder.selftest"
+        guard let defaults = UserDefaults(suiteName: suite) else { report(false, "library: no defaults suite"); return }
+        defaults.removePersistentDomain(forName: suite)
+        let store = RecordingFolderStore(defaults: defaults)
+        store.choose(folder)
+
+        // One WAV and one M4A from the writer, a copy of the WAV, and a file that must be ignored.
+        do {
+            for (format, name) in [(RecordingFormat.wav24, "First"), (RecordingFormat.m4a, "Second")] {
+                let url = folder.appendingPathComponent(name).appendingPathExtension(format.fileExtension)
+                let writer = try RecordingWriter(url: url, format: format, sampleRate: 48000, sourceChannels: 1)
+                try feedSine(into: writer, sampleRate: 48000, channels: 1)
+                writer.finish()
+            }
+            try FileManager.default.copyItem(at: folder.appendingPathComponent("First.wav"),
+                                             to: folder.appendingPathComponent("Taken.wav"))
+            try Data("ignore me".utf8).write(to: folder.appendingPathComponent("notes.txt"))
+        } catch {
+            report(false, "library: \(error.localizedDescription)"); return
+        }
+
+        let library = LibraryModel(folder: store)
+        spin(until: { library.items.count == 3 })
+        report(library.items.count == 3, "library: lists 3 audio files and ignores other files (found \(library.items.count))")
+        report(library.items.allSatisfy { abs(($0.duration ?? 0) - seconds) < 0.1 }, "library: durations are about 2 s")
+        report(library.items.allSatisfy { $0.size > 0 }, "library: sizes are known")
+
+        guard let first = library.items.first(where: { $0.name == "First" }) else {
+            report(false, "library: First.wav not listed"); return
+        }
+        report(library.validateName("", for: first) != nil, "library: empty name rejected")
+        report(library.validateName("a/b", for: first) != nil, "library: name with slash rejected")
+        report(library.validateName("Taken", for: first) != nil, "library: name of an existing file rejected")
+        report(library.validateName("Renamed take", for: first) == nil, "library: normal name accepted")
+
+        library.rename(first, to: "Renamed take")
+        spin(until: { library.items.contains { $0.name == "Renamed take" } })
+        report(FileManager.default.fileExists(atPath: folder.appendingPathComponent("Renamed take.wav").path)
+               && !FileManager.default.fileExists(atPath: folder.appendingPathComponent("First.wav").path),
+               "library: rename moved the file and kept the extension")
+        report(library.items.contains { $0.name == "Renamed take" }, "library: list refreshed after rename")
+        defaults.removePersistentDomain(forName: suite)
+    }
+
+    private static func checkFolderStore() {
+        let suite = "local.recorder.selftest"
+        guard let defaults = UserDefaults(suiteName: suite) else { report(false, "folder: no defaults suite"); return }
+        defaults.removePersistentDomain(forName: suite)
+
+        let fresh = RecordingFolderStore(defaults: defaults)
+        report(fresh.isDefault && fresh.notice == nil && fresh.displayPath == "~/Music/Recordings",
+               "folder: default is ~/Music/Recordings (shown as \(fresh.displayPath))")
+
+        defaults.set("/nonexistent/folder/for/self-test", forKey: RecordingFolderStore.defaultsKey)
+        let missing = RecordingFolderStore(defaults: defaults)
+        report(missing.isDefault && missing.notice != nil, "folder: a missing stored folder falls back to the default with a notice")
+
+        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("recorder-folder-test-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
+        defaults.set(temporary.path, forKey: RecordingFolderStore.defaultsKey)
+        let stored = RecordingFolderStore(defaults: defaults)
+        report(stored.url.standardizedFileURL.path == temporary.standardizedFileURL.path && stored.notice == nil,
+               "folder: a stored folder is used")
+        stored.choose(temporary.appendingPathComponent("sub"))
+        report(defaults.string(forKey: RecordingFolderStore.defaultsKey)?.hasSuffix("/sub") == true,
+               "folder: choosing a folder stores its path")
+        try? FileManager.default.removeItem(at: temporary)
+        defaults.removePersistentDomain(forName: suite)
+    }
+
+    /// Runs the main run loop until the condition holds or two seconds have passed.
+    private static func spin(until condition: () -> Bool) {
+        let deadline = Date().addingTimeInterval(2)
+        while !condition() && Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+        }
     }
 
     // MARK: Output
