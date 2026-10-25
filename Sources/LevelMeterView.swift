@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import SwiftUI
 
 /// Level meter: one bar per channel (up to two) with a scale in dBFS, and a numeric readout.

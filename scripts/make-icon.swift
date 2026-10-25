@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Draws the app icon (a red dot on a dark disc, on a dark rounded square)
 // and writes an .iconset folder. build.sh turns it into AppIcon.icns with iconutil.
 //

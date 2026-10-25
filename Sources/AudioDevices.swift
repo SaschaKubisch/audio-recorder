@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import CoreAudio
 import Foundation
 

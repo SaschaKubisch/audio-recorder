@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import AppKit
 import AVFoundation
 import Foundation
